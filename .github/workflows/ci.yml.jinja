@@ -1,0 +1,176 @@
+
+name: test
+
+on:
+  pull_request:
+  push:
+    branches:
+    {%- for branch in main_branches or ["main", "master"] %}
+      - {{ branch }}
+    {%- endfor %}
+  workflow_dispatch:
+    inputs:
+      pytest_addopts:
+        description:
+          Extra options for pytest; use -vv for full details; see
+          https://docs.pytest.org/en/latest/example/simple.html#how-to-change-command-line-options-defaults
+        required: false
+
+env:
+  {% raw -%}
+  LANG: "en_US.utf-8"
+  LC_ALL: "en_US.utf-8"
+  PIP_CACHE_DIR: ${{ github.workspace }}/.cache.~/pip
+  PIPX_HOME: ${{ github.workspace }}/.cache.~/pipx
+  POETRY_CACHE_DIR: ${{ github.workspace }}/.cache.~/pypoetry
+  POETRY_VIRTUALENVS_IN_PROJECT: "true"
+  PYTEST_ADDOPTS: ${{ github.event.inputs.pytest_addopts }}
+  PYTHONIOENCODING: "UTF-8"
+  {% endraw -%}
+
+jobs:
+  {%- if pytest %}
+    build-test:
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          python:
+          {%- for version in python_versions or ['3.9'] %}
+              - {{ version }}
+          {%- endfor %}
+      steps:
+        # Prepare Docker environment
+        - uses: actions/checkout@v2
+        - name: Set up QEMU
+          uses: docker/setup-qemu-action@v1
+        # Set up and run tests
+        - name: Install python
+          uses: actions/setup-python@v1
+          with:
+            python-version: {{ "${{ matrix.python }}" }}
+        - name: Generate cache key CACHE
+          run:
+            {%- raw %}
+            echo "CACHE=${{ secrets.CACHE_DATE }} ${{ runner.os }} $(python -VV |
+            sha256sum | cut -d' ' -f1) ${{ hashFiles('pyproject.toml') }} ${{
+            hashFiles('poetry.lock') }}" >> $GITHUB_ENV
+            {%- endraw %}
+        - uses: actions/cache@v2
+          with:
+            path: |
+              .cache.~
+              .venv
+              ~/.local/bin
+            key: venv {{ "${{ env.CACHE }}" }}
+        - run: pip install poetry
+        - name: Patch $PATH
+          run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+        - run: poetry install
+        # Run tests
+        - run: poetry run pytest --prebuild
+  {%- endif %}
+    build-push:
+      runs-on: ubuntu-latest
+      services:
+        registry:
+          image: registry:2
+          ports:
+            - 5000:5000
+      env:
+        DOCKER_IMAGE_NAME: {{ project_owner }}/{{ project_name }}
+        DOCKERHUB_IMAGE_NAME: {{ dockerhub_id }}/{{ project_name }} # can be different from the DockerHub username
+        PUSH: {% if push_to_dockerhub or push_to_ghcr %}{{ "${{" }} toJSON(github.ref == 'refs/heads/master' && github.repository == '{{ project_owner }}/{{ project_name }}') {{ "}}" }}{% else -%}False{% endif %}
+      steps:
+        # Set up Docker Environment
+        - uses: actions/checkout@v2
+        - uses: actions/cache@v2
+          with:
+            path: |
+              /tmp/.buildx-cache
+            key:
+            {%- raw %}
+              buildx|${{ secrets.CACHE_DATE }}|${{ runner.os }}|${{
+              hashFiles('Dockerfile') }}
+            {%- endraw %}
+        - name: Set up QEMU
+          uses: docker/setup-qemu-action@v1
+        - name: Set up Docker Buildx
+          id: buildx
+          uses: docker/setup-buildx-action@v1
+          with:
+            driver-opts: network=host
+            install: true
+        - name: Get date
+          run: echo "BUILD_DATE=$(date --rfc-3339 ns)" >> $GITHUB_ENV
+        - name: Set target image
+          id: target_image
+          uses: actions/github-script@v3
+          with:
+            script: |
+              if (process.env.PUSH) {
+                return [
+                  {%- if push_to_ghcr %}
+                  {{ "'ghcr.io/${process.env.DOCKER_IMAGE_NAME}'," }}
+                  {%- endif %}
+                  {%- if push_to_dockerhub %}
+                  {{ "'${process.env.DOCKERHUB_IMAGE_NAME}'," }}
+                  {%- endif %}
+                ]
+              }
+              else {
+                return [
+                  {{ "'localhost:5000/${process.env.DOCKER_IMAGE_NAME}'," }}
+                ]
+              }
+        - name: Docker meta
+          id: docker_meta
+          uses: crazy-max/ghaction-docker-meta@v1
+          with:
+            images: {{ "${{ steps.target_image.outputs.NAME }}" }}
+            tag-edge: true
+            tag-semver: |
+            {%- raw %}
+              {{version}}
+              {{major}}.{{minor}}
+            {%- endraw %}
+        {% if push_to_dockerhub -%}
+        - name: Login to DockerHub
+          if: {{ "${{ fromJSON(env.PUSH) }}" }}
+          uses: docker/login-action@v1
+          with:
+            username: {{ "${{ secrets.DOCKERHUB_USERNAME }}" }}
+            password: {{ "${{ secrets.DOCKERHUB_TOKEN }}" }}
+        {% endif -%}
+        {% if push_to_ghcr -%}
+        - name: Login to GitHub Container Registry
+          if: {{ "${{ fromJSON(env.PUSH) }}" }}
+          uses: docker/login-action@v1
+          with:
+            registry: ghcr.io
+            {%- raw %}
+            username: ${{ secrets.BOT_LOGIN }}
+            password: ${{ secrets.BOT_TOKEN }}
+            {%- endraw %}
+        {% endif -%}
+        # Build
+        - name: Build and push
+          if: {{ "${{ fromJSON(env.PUSH) }}" }}
+          uses: docker/build-push-action@v2
+          with:
+            cache-from: type=local,src=/tmp/.buildx-cache
+            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+            labels: {{ "${{ steps.docker_meta.outputs.labels }}" }}
+            tags: {{ "${{ steps.target_image.outputs.NAME }}" }}
+            build-args: |
+            {%- raw %}
+              BUILD_DATE=${{ env.BUILD_DATE }}
+              VCS_REF=${{ github.sha }}
+            {%- endraw %}
+            context: .
+            file: ./Dockerfile
+            platforms:
+            {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
+              - {{ platform }}
+            {%- endfor %}
+            load: false
+            push: true

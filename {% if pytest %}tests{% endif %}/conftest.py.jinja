@@ -1,0 +1,29 @@
+{% if pytest %}
+from pathlib import Path
+
+import pytest
+from plumbum.cmd import docker
+
+
+def pytest_addoption(parser):
+    """Allow prebuilding image for local testing."""
+    parser.addoption(
+        "--prebuild", action="store_true", help="Build local image before testing"
+    )
+    parser.addoption(
+        "--image",
+        action="store",
+        default="{{ project_name }}-test:latest",
+        help="Specify testing image name",
+    )
+
+{# TODO Modify scope when https://github.com/pytest-dev/pytest-xdist/issues/271 is fixed #}
+@pytest.fixture(scope="session")
+def image(request):
+    """Get image name. Builds it if needed."""
+    image = request.config.getoption("--image")
+    if request.config.getoption("--prebuild"):
+        docker("image", "build", "-t", image, Path(__file__).parent.parent)
+    return image
+
+{% endif %}

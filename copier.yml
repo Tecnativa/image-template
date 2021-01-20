@@ -1,0 +1,76 @@
+# Configure jinja2 defaults to make syntax highlighters lives easier
+_templates_suffix: .jinja
+_envops:
+  block_end_string: "%}"
+  block_start_string: "{%"
+  comment_end_string: "#}"
+  comment_start_string: "{#"
+  keep_trailing_newline: true
+  variable_end_string: "}}"
+  variable_start_string: "{{"
+
+# This template is just a complement, so we better use a different default answers file
+_answers_file: .copier-answers.image-template.yml
+
+# Questions
+project_name:
+  type: str
+  help: The name of the project. This will also apply to the tags of the docker images built
+
+project_owner:
+  type: str
+  help: The owner of the project. This will also apply to the tags of the docker images built
+
+docker_platforms:
+  type: yaml
+  default: ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x']
+  help: The platforms in which you want to build your container image
+
+push_to_ghcr:
+  type: bool
+  default: true
+  help: |
+    Push the docker image to the Github Container Registry?
+
+    ⚠ If you are going to push to the Github Container Registry with the provided GH Action, you need to set the BOT_LOGIN and BOT_TOKEN secrets
+    in Github with a Github Personal Access Token with the following permissions:
+      - read:packages
+      - write:packages
+      - delete:packages
+
+push_to_dockerhub:
+  type: bool
+  default: true
+  help: |
+    Push the docker image to DockerHub?
+
+    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets in Github
+
+dockerhub_id:
+  type: str
+  default: "{{ project_owner }}"
+  when: "{{ push_to_dockerhub }}"
+  help: If the image is going to be uploaded to DockerHub, what is the DockerId of the repository owner? (ignore if you are not going to push to DockerHub)
+
+pytest:
+  default: true
+  type: bool
+  help: Will your project use Pytest as part of the CI system?
+
+python_versions:
+  type: yaml
+  default: ['3.9']
+  when: "{{ pytest }}"
+  help: What Python versions will your project use? (ignore if you are not going to use Python)
+
+main_branches:
+  default: [main, master]
+  type: yaml
+  help:
+    Protected branches where you will not be able to do direct commits. Set to null to
+    disable. Otherwise, it's an array of strings.
+
+fork:
+  default: false
+  type: bool
+  help: Is this repo a fork? If it is, this template will set up automatic updates from upstream to a specific branch on your project
