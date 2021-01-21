@@ -31,7 +31,7 @@ env:
 jobs:
   {%- if pytest %}
     build-test:
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-20.04
       strategy:
         matrix:
           python:
@@ -39,10 +39,8 @@ jobs:
               - {{ version }}
           {%- endfor %}
       steps:
-        # Prepare Docker environment
+        # Prepare environment
         - uses: actions/checkout@v2
-        - name: Set up QEMU
-          uses: docker/setup-qemu-action@v1
         # Set up and run tests
         - name: Install python
           uses: actions/setup-python@v1
@@ -70,7 +68,7 @@ jobs:
         - run: poetry run pytest --prebuild
   {%- endif %}
     build-push:
-      runs-on: ubuntu-latest
+      runs-on: ubuntu-20.04
       services:
         registry:
           image: registry:2
@@ -100,11 +98,9 @@ jobs:
           with:
             driver-opts: network=host
             install: true
-        - name: Get date
-          run: echo "BUILD_DATE=$(date --rfc-3339 ns)" >> $GITHUB_ENV
         # Build and push
         - name: Docker meta for local images
-          id: docker_meta_private
+          id: docker_meta_local
           uses: crazy-max/ghaction-docker-meta@v1
           with:
             {%- raw %}
@@ -131,7 +127,6 @@ jobs:
             labels: ${{ steps.docker_meta_local.outputs.labels }}
             tags: ${{ steps.docker_meta_local.outputs.tags }}
             build-args: |
-              BUILD_DATE=${{ env.BUILD_DATE }}
               VCS_REF=${{ github.sha }}
             {%- endraw %}
         {% if dockerhub_image or push_to_ghcr -%}
@@ -191,7 +186,6 @@ jobs:
             labels: ${{ steps.docker_meta_public.outputs.labels }}
             tags: ${{ steps.docker_meta_public.outputs.tags }}
             build-args: |
-              BUILD_DATE=${{ env.BUILD_DATE }}
               VCS_REF=${{ github.sha }}
             {%- endraw %}
         {% endif %}
