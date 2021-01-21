@@ -14,6 +14,12 @@ _envops:
 # This template is just a complement, so we better use a different default answers file
 _answers_file: .copier-answers.image-template.yml
 
+_skip_if_exists:
+  - pyproject.toml
+  - README.md
+  - .vscode/settings.json
+
+
 # Questions
 project_name:
   type: str
