@@ -77,9 +77,9 @@ jobs:
           ports:
             - 5000:5000
       env:
-        DOCKER_IMAGE_NAME: {{ project_owner }}/{{ project_name }}
-        DOCKERHUB_IMAGE_NAME: {{ dockerhub_id }}/{{ project_name }} # can be different from the DockerHub username
-        PUSH: {% if dockerhub_image or push_to_ghcr %}{{ "${{" }} toJSON(github.ref == 'refs/heads/master' && github.repository == '{{ project_owner }}/{{ project_name }}') {{ "}}" }}{% else %}False{% endif %}
+        DOCKER_IMAGE_NAME: {{ "${{ github.repository }}" }}
+        DOCKERHUB_IMAGE_NAME: {{ dockerhub_image }}
+        PUSH: {% if dockerhub_image or push_to_ghcr %}{{ "${{" }} toJSON(github.event_name != 'pull_request') {{ "}}" }}{% else %}False{% endif %}
       steps:
         # Set up Docker Environment
         - uses: actions/checkout@v2
@@ -102,37 +102,40 @@ jobs:
             install: true
         - name: Get date
           run: echo "BUILD_DATE=$(date --rfc-3339 ns)" >> $GITHUB_ENV
-        - name: Set target image
-          id: target_image
-          uses: actions/github-script@v3
-          with:
-            script: |
-              if (process.env.PUSH) {
-                return [
-                  {%- if push_to_ghcr %}
-                  {{ "'ghcr.io/${process.env.DOCKER_IMAGE_NAME}'," }}
-                  {%- endif %}
-                  {%- if dockerhub_image %}
-                  {{ "'${process.env.DOCKERHUB_IMAGE_NAME}'," }}
-                  {%- endif %}
-                ]
-              }
-              else {
-                return [
-                  {{ "'localhost:5000/${process.env.DOCKER_IMAGE_NAME}'," }}
-                ]
-              }
-        - name: Docker meta
-          id: docker_meta
+        # Build and push
+        - name: Docker meta for local images
+          id: docker_meta_private
           uses: crazy-max/ghaction-docker-meta@v1
           with:
             {%- raw %}
-            images: "${{ steps.target_image.outputs.NAME }}"
+            images: localhost:5000/${{ env.DOCKER_IMAGE_NAME }}
             tag-edge: true
             tag-semver: |
               {{version}}
               {{major}}.{{minor}}
             {%- endraw %}
+        - name: Build and push to local (test) registry
+          uses: docker/build-push-action@v2
+          with:
+            context: .
+            file: ./Dockerfile
+            platforms:
+            {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
+              - {{ platform }}
+            {%- endfor %}
+            load: false
+            push: true
+            cache-from: type=local,src=/tmp/.buildx-cache
+            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+            {%- raw %}
+            labels: ${{ steps.docker_meta_local.outputs.labels }}
+            tags: ${{ steps.docker_meta_local.outputs.tags }}
+            build-args: |
+              BUILD_DATE=${{ env.BUILD_DATE }}
+              VCS_REF=${{ github.sha }}
+            {%- endraw %}
+        {% if dockerhub_image or push_to_ghcr -%}
+        # Next jobs only happen outside of pull requests and on main branches
         {% if dockerhub_image -%}
         - name: Login to DockerHub
           if: {{ "${{ fromJSON(env.PUSH) }}" }}
@@ -146,26 +149,34 @@ jobs:
           if: {{ "${{ fromJSON(env.PUSH) }}" }}
           uses: docker/login-action@v1
           with:
-            registry: ghcr.io
             {%- raw %}
+            registry: ghcr.io
             username: ${{ secrets.BOT_LOGIN }}
             password: ${{ secrets.BOT_TOKEN }}
             {%- endraw %}
         {% endif -%}
-        # Build
-        - name: Build and push
+        - name: Docker meta for public images
+          if: {{ "${{ fromJSON(env.PUSH) }}" }}
+          id: docker_meta_public
+          uses: crazy-max/ghaction-docker-meta@v1
+          with:
+            images:
+              {%- if push_to_ghcr %}
+              - {{ "ghcr.io/${{ env.DOCKER_IMAGE_NAME }}" }}
+              {%- endif -%}
+              {%- if dockerhub_image %}
+              - {{ "${{ env.DOCKERHUB_IMAGE_NAME }}" }}
+              {%- endif %}
+            {%- raw %}
+            tag-edge: true
+            tag-semver: |
+              {{version}}
+              {{major}}.{{minor}}
+            {%- endraw %}
+        - name: Build and push to public registry(s)
           if: {{ "${{ fromJSON(env.PUSH) }}" }}
           uses: docker/build-push-action@v2
           with:
-            cache-from: type=local,src=/tmp/.buildx-cache
-            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
-            labels: {{ "${{ steps.docker_meta.outputs.labels }}" }}
-            tags: {{ "${{ steps.target_image.outputs.NAME }}" }}
-            build-args: |
-            {%- raw %}
-              BUILD_DATE=${{ env.BUILD_DATE }}
-              VCS_REF=${{ github.sha }}
-            {%- endraw %}
             context: .
             file: ./Dockerfile
             platforms:
@@ -174,3 +185,13 @@ jobs:
             {%- endfor %}
             load: false
             push: true
+            cache-from: type=local,src=/tmp/.buildx-cache
+            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+            {%- raw %}
+            labels: ${{ steps.docker_meta_public.outputs.labels }}
+            tags: ${{ steps.docker_meta_public.outputs.tags }}
+            build-args: |
+              BUILD_DATE=${{ env.BUILD_DATE }}
+              VCS_REF=${{ github.sha }}
+            {%- endraw %}
+        {% endif %}
