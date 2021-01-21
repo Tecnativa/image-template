@@ -79,7 +79,7 @@ jobs:
       env:
         DOCKER_IMAGE_NAME: {{ project_owner }}/{{ project_name }}
         DOCKERHUB_IMAGE_NAME: {{ dockerhub_id }}/{{ project_name }} # can be different from the DockerHub username
-        PUSH: {% if push_to_dockerhub or push_to_ghcr %}{{ "${{" }} toJSON(github.ref == 'refs/heads/master' && github.repository == '{{ project_owner }}/{{ project_name }}') {{ "}}" }}{% else -%}False{% endif %}
+        PUSH: {% if dockerhub_image or push_to_ghcr %}{{ "${{" }} toJSON(github.ref == 'refs/heads/master' && github.repository == '{{ project_owner }}/{{ project_name }}') {{ "}}" }}{% else %}False{% endif %}
       steps:
         # Set up Docker Environment
         - uses: actions/checkout@v2
@@ -112,7 +112,7 @@ jobs:
                   {%- if push_to_ghcr %}
                   {{ "'ghcr.io/${process.env.DOCKER_IMAGE_NAME}'," }}
                   {%- endif %}
-                  {%- if push_to_dockerhub %}
+                  {%- if dockerhub_image %}
                   {{ "'${process.env.DOCKERHUB_IMAGE_NAME}'," }}
                   {%- endif %}
                 ]
@@ -126,14 +126,14 @@ jobs:
           id: docker_meta
           uses: crazy-max/ghaction-docker-meta@v1
           with:
-            images: {{ "${{ steps.target_image.outputs.NAME }}" }}
+            {%- raw %}
+            images: "${{ steps.target_image.outputs.NAME }}"
             tag-edge: true
             tag-semver: |
-            {%- raw %}
               {{version}}
               {{major}}.{{minor}}
             {%- endraw %}
-        {% if push_to_dockerhub -%}
+        {% if dockerhub_image -%}
         - name: Login to DockerHub
           if: {{ "${{ fromJSON(env.PUSH) }}" }}
           uses: docker/login-action@v1

@@ -23,6 +23,7 @@ project_owner:
 
 docker_platforms:
   type: yaml
+  multiline: true
   default: ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x']
   help: The platforms in which you want to build your container image
 
@@ -38,19 +39,15 @@ push_to_ghcr:
       - write:packages
       - delete:packages
 
-push_to_dockerhub:
-  type: bool
-  default: true
-  help: |
-    Push the docker image to DockerHub?
+dockerhub_image:
+  type: str
+  default: "{{ project_owner }}/{{ project_name }}"
+  help:
+    If the image is going to be uploaded to DockerHub, what is the name of the docker image to be pushed?
 
     ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets in Github
 
-dockerhub_id:
-  type: str
-  default: "{{ project_owner }}"
-  when: "{{ push_to_dockerhub }}"
-  help: If the image is going to be uploaded to DockerHub, what is the DockerId of the repository owner? (ignore if you are not going to push to DockerHub)
+    Leave empty if you don't want to push to DockerHub.
 
 pytest:
   default: true
@@ -59,6 +56,7 @@ pytest:
 
 python_versions:
   type: yaml
+  multiline: true
   default: ['3.9']
   when: "{{ pytest }}"
   help: What Python versions will your project use? (ignore if you are not going to use Python)
@@ -66,6 +64,7 @@ python_versions:
 main_branches:
   default: [main, master]
   type: yaml
+  multiline: true
   help:
     Protected branches where you will not be able to do direct commits. Set to null to
     disable. Otherwise, it's an array of strings.
