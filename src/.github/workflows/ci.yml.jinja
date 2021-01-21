@@ -112,6 +112,7 @@ jobs:
             tag-edge: true
             tag-semver: |
               {{version}}
+              {{major}}
               {{major}}.{{minor}}
             {%- endraw %}
         - name: Build and push to local (test) registry
