@@ -17,7 +17,7 @@ on:
         required: false
 
 env:
-  {% raw -%}
+  {%- raw %}
   LANG: "en_US.utf-8"
   LC_ALL: "en_US.utf-8"
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache.~/pip
@@ -26,7 +26,7 @@ env:
   POETRY_VIRTUALENVS_IN_PROJECT: "true"
   PYTEST_ADDOPTS: ${{ github.event.inputs.pytest_addopts }}
   PYTHONIOENCODING: "UTF-8"
-  {% endraw -%}
+  {%- endraw %}
 
 jobs:
   {%- if pytest %}
