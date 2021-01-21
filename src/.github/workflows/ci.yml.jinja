@@ -119,9 +119,9 @@ jobs:
           with:
             context: .
             file: ./Dockerfile
-            platforms:
+            platforms: |
             {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
-              - {{ platform }}
+              {{ platform }}
             {%- endfor %}
             load: false
             push: true
@@ -160,12 +160,12 @@ jobs:
           id: docker_meta_public
           uses: crazy-max/ghaction-docker-meta@v1
           with:
-            images:
+            images: |
               {%- if push_to_ghcr %}
-              - {{ "ghcr.io/${{ env.DOCKER_IMAGE_NAME }}" }}
+              {{ "ghcr.io/${{ env.DOCKER_IMAGE_NAME }}" }}
               {%- endif -%}
               {%- if dockerhub_image %}
-              - {{ "${{ env.DOCKERHUB_IMAGE_NAME }}" }}
+              {{ "${{ env.DOCKERHUB_IMAGE_NAME }}" }}
               {%- endif %}
             {%- raw %}
             tag-edge: true
@@ -179,9 +179,9 @@ jobs:
           with:
             context: .
             file: ./Dockerfile
-            platforms:
+            platforms: |
             {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
-              - {{ platform }}
+              {{ platform }}
             {%- endfor %}
             load: false
             push: true
