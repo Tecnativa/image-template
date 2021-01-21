@@ -21,7 +21,6 @@ def pytest_addoption(parser):
 
 {# TODO Modify scope when https://github.com/pytest-dev/pytest-xdist/issues/271 is fixed #}
 @pytest.fixture(scope="session")
-@pytest.fixture(scope="session")
 def image(request):
     """Get image name. Builds it if needed."""
     image = request.config.getoption("--image")

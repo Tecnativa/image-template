@@ -141,7 +141,7 @@ jobs:
           if: {{ "${{ fromJSON(env.PUSH) }}" }}
           uses: docker/login-action@v1
           with:
-            username: {{ "${{ secrets.DOCKERHUB_USERNAME }}" }}
+            username: {{ "${{ secrets.DOCKERHUB_LOGIN }}" }}
             password: {{ "${{ secrets.DOCKERHUB_TOKEN }}" }}
         {% endif -%}
         {% if push_to_ghcr -%}

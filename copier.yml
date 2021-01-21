@@ -45,7 +45,7 @@ dockerhub_image:
   help:
     If the image is going to be uploaded to DockerHub, what is the name of the docker image to be pushed?
 
-    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set the DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets in Github
+    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set the DOCKERHUB_LOGIN and DOCKERHUB_TOKEN secrets in Github
 
     Leave empty if you don't want to push to DockerHub.
 
