@@ -16,7 +16,7 @@ _answers_file: .copier-answers.image-template.yml
 
 _skip_if_exists:
   - pyproject.toml
-  - README.md
+  - pytest.ini
   - .vscode/settings.json
 
 # Questions
