@@ -69,8 +69,3 @@ main_branches:
   help:
     Protected branches where you will not be able to do direct commits. Set to null to
     disable. Otherwise, it's an array of strings.
-
-fork:
-  default: false
-  type: bool
-  help: Is this repo a fork? If it is, this template will set up automatic updates from upstream to a specific branch on your project

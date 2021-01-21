@@ -14,12 +14,9 @@ It uses [Copier][] to keep your projects updated with a unified GH Actions struc
 
 1. **Docker automated builds with Github Actions**
 1. **Python project structure for [Pytest][] with [Poetry][]** (optional)
-1. **An automated [fork sync][] with the upstream branch** (optional)
-<!-- TODO: Might not be necessary -->
 
 [Pytest]: https://docs.pytest.org/
 [Poetry]: https://python-poetry.org/
-[fork sync]: https://github.com/marketplace/actions/fork-sync-with-upstream
 
 ## 1st usage
 
