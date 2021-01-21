@@ -6,7 +6,7 @@ description = ""
 authors = ["{{ project_owner }}"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^{{ python_versions|sort|first }}"
 plumbum = "^1.6.9"
 
 [tool.poetry.dev-dependencies]
