@@ -19,20 +19,32 @@ _skip_if_exists:
   - README.md
   - .vscode/settings.json
 
-
 # Questions
 project_name:
   type: str
-  help: The name of the project. This will also apply to the tags of the docker images built
+  help:
+    The name of the project. This will also apply to the tags of the docker images built
 
 project_owner:
   type: str
-  help: The owner of the project. This will also apply to the tags of the docker images built
+  help:
+    The owner of the project. This will also apply to the tags of the docker images
+    built
 
 docker_platforms:
   type: yaml
   multiline: true
-  default: ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x']
+  default:
+    [
+      "linux/386",
+      "linux/amd64",
+      "linux/arm/v6",
+      "linux/arm/v7",
+      "linux/arm/v8",
+      "linux/arm64",
+      "linux/ppc64le",
+      "linux/s390x",
+    ]
   help: The platforms in which you want to build your container image
 
 push_to_ghcr:
@@ -50,10 +62,11 @@ push_to_ghcr:
 dockerhub_image:
   type: str
   default: "{{ project_owner }}/{{ project_name }}"
-  help:
-    If the image is going to be uploaded to DockerHub, what is the name of the docker image to be pushed?
+  help: If the image is going to be uploaded to DockerHub, what is the name of the
+    docker image to be pushed?
 
-    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set the DOCKERHUB_LOGIN and DOCKERHUB_TOKEN secrets in Github
+    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set
+    the DOCKERHUB_LOGIN and DOCKERHUB_TOKEN secrets in Github
 
     Leave empty if you don't want to push to DockerHub.
 
@@ -65,9 +78,11 @@ pytest:
 python_versions:
   type: yaml
   multiline: true
-  default: ['3.9']
+  default: ["3.9"]
   when: "{{ pytest }}"
-  help: What Python versions will your project use? (ignore if you are not going to use Python)
+  help:
+    What Python versions will your project use? (ignore if you are not going to use
+    Python)
 
 main_branches:
   default: [main, master]
