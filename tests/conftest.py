@@ -7,7 +7,7 @@ with open("copier.yml") as copier_fd:
     COPIER_SETTINGS = yaml.safe_load(copier_fd)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def cloned_template(tmp_path_factory):
     """This repo cloned to a temporary destination.
     The clone will include dirty changes, and it will have a 'test' tag in its HEAD.
@@ -15,7 +15,7 @@ def cloned_template(tmp_path_factory):
     """
     patches = [git("diff", "--cached"), git("diff")]
     with tmp_path_factory.mktemp("cloned_template_") as dirty_template_clone:
-        git("clone", ".", dirty_template_clone)
+        git("clone", "--recurse-submodules", ".", dirty_template_clone)
         with local.cwd(dirty_template_clone):
             git("config", "commit.gpgsign", "false")
             for patch in patches:
