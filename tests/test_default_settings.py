@@ -45,7 +45,11 @@ def test_default_settings(tmp_path: Path, cloned_template: Path):
             str(tmp_path),
             vcs_ref="test",
             force=True,
-            data={},
+            data={
+                "project_name": "docker-test",
+                "project_owner": "Test",
+                "dockerhub_image": "test/test",
+            },
         )
     with local.cwd(tmp_path):
         # Check that files exist
@@ -61,4 +65,45 @@ def test_default_settings(tmp_path: Path, cloned_template: Path):
             processed_content = content.replace(
                 "\non:", "\n'on':"
             )  # HACK: pyyaml interprets "on" key as "True", causing a false negative on the validation function
-            assert validate_schema(yaml.safe_load(processed_content))
+            yaml_data = yaml.safe_load(processed_content)
+            # Ensure project data propagated
+            assert (
+                yaml_data["jobs"]["build-push"]["env"]["DOCKERHUB_IMAGE_NAME"]
+                == "test/test"
+            )
+            # Validate according to Github Actions expected syntax
+            assert validate_schema(yaml_data)
+
+
+def test_no_pytest_settings(tmp_path: Path, cloned_template: Path):
+    """Test that a template can be rendered from zero with different input data."""
+    with local.cwd(cloned_template):
+        copy(
+            ".",
+            str(tmp_path),
+            vcs_ref="test",
+            force=True,
+            data={
+                "project_name": "docker-test",
+                "project_owner": "Test",
+                "dockerhub_image": "test/test",
+                "pytest": False,
+            },
+        )
+    with local.cwd(tmp_path):
+        # Check that files exist
+        assert Path(".github", "workflows", "ci.yml").exists()
+        assert Path(".copier-answers.image-template.yml").exists()
+        # Tests shouldn't exist
+        assert not Path("pytest.ini").exists()
+        assert not Path("pyproject.toml").exists()
+        assert not Path("tests/conftest.py").exists()
+        # Validate CI config
+        with Path(".github", "workflows", "ci.yml").open("r") as f:
+            content = f.read()
+            processed_content = content.replace(
+                "\non:", "\n'on':"
+            )  # HACK: pyyaml interprets "on" key as "True", causing a false negative on the validation function
+            yaml_data = yaml.safe_load(processed_content)
+            # Validate according to Github Actions expected syntax
+            assert validate_schema(yaml_data)
