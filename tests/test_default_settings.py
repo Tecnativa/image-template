@@ -57,10 +57,7 @@ def test_default_settings(tmp_path: Path, cloned_template: Path):
         # Validate CI config
         with Path(".github", "workflows", "ci.yml").open("r") as f:
             content = f.read()
-            processed_content = content.replace(
-                "\non:", "\n'on':"
-            )  # HACK: pyyaml interprets "on" key as "True", causing a false negative on the validation function
-            yaml_data = yaml.safe_load(processed_content)
+            yaml_data = yaml.safe_load(content)
             # Ensure project data propagated
             assert (
                 yaml_data["jobs"]["build-push"]["env"]["DOCKERHUB_IMAGE_NAME"]
@@ -96,9 +93,6 @@ def test_no_pytest_settings(tmp_path: Path, cloned_template: Path):
         # Validate CI config
         with Path(".github", "workflows", "ci.yml").open("r") as f:
             content = f.read()
-            processed_content = content.replace(
-                "\non:", "\n'on':"
-            )  # HACK: pyyaml interprets "on" key as "True", causing a false negative on the validation function
-            yaml_data = yaml.safe_load(processed_content)
+            yaml_data = yaml.safe_load(content)
             # Validate according to Github Actions expected syntax
             validate_schema(yaml_data, cloned_template)
