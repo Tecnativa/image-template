@@ -31,7 +31,7 @@ project_owner:
     The owner of the project. This will also apply to the tags of the docker images
     built
 
-docker_platforms:
+image_platforms:
   type: yaml
   multiline: true
   default:
