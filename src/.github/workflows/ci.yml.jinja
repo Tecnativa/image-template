@@ -116,7 +116,7 @@ jobs:
             context: .
             file: ./Dockerfile
             platforms: |
-            {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
+            {%- for platform in docker_platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
               {{ platform }}
             {%- endfor %}
             load: false
@@ -175,7 +175,7 @@ jobs:
             context: .
             file: ./Dockerfile
             platforms: |
-            {%- for platform in platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
+            {%- for platform in docker_platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
               {{ platform }}
             {%- endfor %}
             load: false
