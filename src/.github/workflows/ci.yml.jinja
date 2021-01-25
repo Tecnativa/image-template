@@ -93,8 +93,7 @@ jobs:
               /tmp/.buildx-cache
             key:
             {%- raw %}
-              buildx|${{ secrets.CACHE_DATE }}|${{ runner.os }}|${{
-              hashFiles('Dockerfile') }}
+              buildx|${{ secrets.CACHE_DATE }}|${{ runner.os }}
             {%- endraw %}
         - name: Set up QEMU
           uses: docker/setup-qemu-action@v1
