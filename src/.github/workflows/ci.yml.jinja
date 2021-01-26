@@ -7,6 +7,8 @@ name: Build, Test & Deploy
     {%- for branch in main_branches or ["main", "master"] %}
       - {{ branch }}
     {%- endfor %}
+    tags:
+      - 'v*'
   workflow_dispatch:
     {%- if pytest %}
     inputs:
