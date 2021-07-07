@@ -1,0 +1,13 @@
+{% if pytest %}
+import logging
+
+from plumbum.cmd import docker
+
+logger = logging.getLogger()
+
+
+def test_service(container_factory):
+    with container_factory() as test_container:
+        return
+
+{% endif %}
