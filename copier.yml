@@ -32,57 +32,42 @@ project_owner:
     built
 
 image_platforms:
-  type: yaml
-  multiline: true
+  type: str
+  choices:
+    - amd64
+    - arm64
+  multiselect: true
   default:
-    [
-      "linux/386",
-      "linux/amd64",
-      "linux/arm/v6",
-      "linux/arm/v7",
-      "linux/arm/v8",
-      "linux/arm64",
-      "linux/ppc64le",
-      "linux/s390x",
-    ]
+    - amd64
+    - arm64
   help: The platforms in which you want to build your container image
+image_name:
+  type: str
+  default: "{{ project_owner }}/{{ project_name }}"
 
-push_to_ghcr:
-  type: bool
-  default: true
+target_registries:
+  type: str
+  multiselect: true
+  default: []
+  choices:
+    "ghcr.io": "ghcr.io"
+    "DockerHub": dockerhub
   help: |
-    Push the docker image to the Github Container Registry?
+    Registries to push the image to.
 
-    ⚠ If you are going to push to the Github Container Registry with the provided GH Action, you need to set the BOT_LOGIN and BOT_TOKEN secrets
+    ⚠ ghcr.io: If you are going to push to the Github Container Registry with the provided GH Action, you need to set the BOT_LOGIN and BOT_TOKEN secrets
     in Github with a Github Personal Access Token with the following permissions:
       - read:packages
       - write:packages
       - delete:packages
 
-dockerhub_image:
-  type: str
-  default: "{{ project_owner }}/{{ project_name }}"
-  help: If the image is going to be uploaded to DockerHub, what is the name of the
-    docker image to be pushed?
-
-    ⚠ If you are going to push to DockerHub with the provided GH Action, you need to set
+    ⚠ DockerHub: If you are going to push to DockerHub with the provided GH Action, you need to set
     the DOCKERHUB_LOGIN and DOCKERHUB_TOKEN secrets in Github
-
-    Leave empty if you don't want to push to DockerHub.
 
 pytest:
   default: true
   type: bool
   help: Will your project use Pytest as part of the CI system?
-
-python_versions:
-  type: yaml
-  multiline: true
-  default: ["3.9"]
-  when: "{{ pytest }}"
-  help:
-    What Python versions will your project use? (ignore if you are not going to use
-    Python)
 
 main_branches:
   default: [main, master]

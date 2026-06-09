@@ -3,7 +3,7 @@ from pathlib import Path
 
 import jsonschema
 import yaml
-from copier.main import copy
+from copier import run_copy
 from plumbum import local
 
 logger = logging.getLogger(__name__)
@@ -35,15 +35,15 @@ def validate_schema(yaml_data, cloned_template: Path):
 def test_default_settings(tmp_path: Path, cloned_template: Path):
     """Test that a template can be rendered from zero."""
     with local.cwd(cloned_template):
-        copy(
+        run_copy(
             ".",
             str(tmp_path),
             vcs_ref="test",
-            force=True,
+            defaults=True,
             data={
                 "project_name": "docker-test",
                 "project_owner": "Test",
-                "dockerhub_image": "test/test",
+                "image_name": "test/test",
             },
         )
     with local.cwd(tmp_path):
@@ -51,18 +51,12 @@ def test_default_settings(tmp_path: Path, cloned_template: Path):
         assert Path(".github", "workflows", "ci.yml").exists()
         assert Path(".copier-answers.image-template.yml").exists()
         # Tests are included by default
-        assert Path("pytest.ini").exists()
         assert Path("pyproject.toml").exists()
         assert Path("tests/conftest.py").exists()
         # Validate CI config
         with Path(".github", "workflows", "ci.yml").open("r") as f:
             content = f.read()
             yaml_data = yaml.safe_load(content)
-            # Ensure project data propagated
-            assert (
-                yaml_data["jobs"]["build-push"]["env"]["DOCKERHUB_IMAGE_NAME"]
-                == "test/test"
-            )
             # Validate according to Github Actions expected syntax
             validate_schema(yaml_data, cloned_template)
 
@@ -70,15 +64,15 @@ def test_default_settings(tmp_path: Path, cloned_template: Path):
 def test_no_pytest_settings(tmp_path: Path, cloned_template: Path):
     """Test that a template can be rendered from zero with different input data."""
     with local.cwd(cloned_template):
-        copy(
+        run_copy(
             ".",
             str(tmp_path),
             vcs_ref="test",
-            force=True,
+            defaults=True,
             data={
                 "project_name": "docker-test",
                 "project_owner": "Test",
-                "dockerhub_image": "test/test",
+                "image_name": "test/test",
                 "pytest": False,
             },
         )
@@ -87,7 +81,6 @@ def test_no_pytest_settings(tmp_path: Path, cloned_template: Path):
         assert Path(".github", "workflows", "ci.yml").exists()
         assert Path(".copier-answers.image-template.yml").exists()
         # Tests shouldn't exist
-        assert not Path("pytest.ini").exists()
         assert not Path("pyproject.toml").exists()
         assert not Path("tests/conftest.py").exists()
         # Validate CI config

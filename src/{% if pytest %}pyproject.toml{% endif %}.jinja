@@ -5,17 +5,32 @@ version = "0.0.0"
 description = ""
 authors = ["{{ project_owner }}"]
 
-[tool.poetry.dependencies]
-python = "^{{ python_versions|sort|first }}"
-plumbum = "^1.6.9"
+[project]
+name = "ci-base"
+version = "0.0.0"
+description = "Base image for CI/CD workloads"
+authors = [{ name = "Jairo Llopis", email = "jairo.llopis@tecnativa.com" }]
+requires-python = ">=3.9,<3.13"
+license = "BOOST-1.0"
+dependencies = [
 
-[tool.poetry.dev-dependencies]
-black = {version = "^20.8b1", allow-prereleases = true}
-flake8 = "^3.8.4"
-plumbum = "^1.6.9"
-pytest-xdist = "^2.1.0"
+]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "pre-commit-uv>=4.1.5",
+    "pytest>=6.2.1",
+    # We don't use pytest xdist because tests are so small it causes
+    # more trouble than it solves.
+    # "pytest-xdist>=2.2.0",
+    "python-on-whales>=0.81.0",
+]
+
+[tool.uv]
+package = false
+default-groups = "all"
+[tool.pytest.ini_options]
+addopts = "-ra"
+
 {% endif %}
