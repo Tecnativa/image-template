@@ -15,10 +15,10 @@ configuration.
 ## What this project adds and configures
 
 1. **Docker automated builds with Github Actions**
-1. **Python project structure for [Pytest][] with [Poetry][]** (optional)
+1. **Python project structure for [Pytest][] with [UV][]** (optional)
 
 [pytest]: https://docs.pytest.org/
-[poetry]: https://python-poetry.org/
+[uv]: https://docs.astral.sh/uv/
 
 ## 1st usage
 

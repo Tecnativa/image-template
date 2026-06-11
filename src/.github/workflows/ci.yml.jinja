@@ -8,12 +8,14 @@ name: Build, Test & Deploy
       - {{ branch }}
     {%- endfor %}
     tags:
-      - 'v*'
+      - "v*"
+  schedule:
+    - cron: 0 0 * * 0
   workflow_dispatch:
     {%- if pytest %}
     inputs:
       pytest_addopts:
-        description:
+        description: >
           Extra options for pytest; use -vv for full details; see
           https://docs.pytest.org/en/latest/example/simple.html#how-to-change-command-line-options-defaults
         required: false
@@ -24,172 +26,167 @@ env:
   LC_ALL: "en_US.utf-8"
   {%- if pytest %}
   {%- raw %}
-  PIP_CACHE_DIR: ${{ github.workspace }}/.cache.~/pip
-  PIPX_HOME: ${{ github.workspace }}/.cache.~/pipx
-  POETRY_CACHE_DIR: ${{ github.workspace }}/.cache.~/pypoetry
-  POETRY_VIRTUALENVS_IN_PROJECT: "true"
   PYTEST_ADDOPTS: ${{ github.event.inputs.pytest_addopts }}
   PYTHONIOENCODING: "UTF-8"
+  UV_CACHE_DIR: /tmp/.uv-cache
   {%- endraw %}
   {%- endif %}
 
 jobs:
-  {%- if pytest %}
-    build-test:
-      runs-on: ubuntu-20.04
-      strategy:
-        matrix:
-          python:
-          {%- for version in python_versions or ['3.9'] %}
-              - {{ version }}
-          {%- endfor %}
-      steps:
-        # Prepare environment
-        - uses: actions/checkout@v2
-        # Set up and run tests
-        - name: Install python
-          uses: actions/setup-python@v2
-          with:
-            python-version: {{ "${{ matrix.python }}" }}
-        - name: Generate cache key CACHE
-          run:
-            {%- raw %}
-            echo "CACHE=${{ secrets.CACHE_DATE }} ${{ runner.os }} $(python -VV |
-            sha256sum | cut -d' ' -f1) ${{ hashFiles('pyproject.toml') }} ${{
-            hashFiles('poetry.lock') }}" >> $GITHUB_ENV
-            {%- endraw %}
-        - uses: actions/cache@v2
-          with:
-            path: |
-              .cache.~
-              .venv
-              ~/.local/bin
-            key: venv {{ "${{ env.CACHE }}" }}
-        - run: pip install poetry
-        - name: Patch $PATH
-          run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-        - run: poetry install
-        # Run tests
-        - run: poetry run pytest --prebuild
-  {%- endif %}
-    build-push:
-      runs-on: ubuntu-20.04
-      services:
-        registry:
-          image: registry:2
-          ports:
-            - 5000:5000
-      env:
-        DOCKER_IMAGE_NAME: {{ "${{ github.repository }}" }}
-        {%- if dockerhub_image %}
-        DOCKERHUB_IMAGE_NAME: {{ dockerhub_image }}
+  # We run separate jobs amd64 and arm64, each pushes its own image untagged, and then
+  # we create the proper tag in another job.
+  build-test-push:
+    strategy:
+      matrix:
+        platform:
+          - amd64
+          - arm64
+    {%- raw %}
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    {%- endraw %}
+    if: >
+      github.ref == github.event.repository.default_branch || (github.event_name ==
+      'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - &image-name
+        # This needs to be done here as there is no other way as of June 2026 to
+        # get the lowercase name of the repo (org/reponame)
+        name: downcase image name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - &setup-buildx
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+      - name: Build image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          push: false
+          {%- raw %}
+          cache-from: type=gha,scope=build-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
+          {%- endraw %}
+          tags: ci-base:testing
+        {%- if pytest%}
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
+      - name: Run tests
+        if: github.ref == github.event.repository.default_branch
+        run: uv run pytest --image {{ project_name }}:testing
         {%- endif %}
-        PUSH: {% if dockerhub_image or push_to_ghcr %}{{ "${{" }} toJSON(github.event_name != 'pull_request') {{ "}}" }}{% else %}False{% endif %}
-      steps:
-        # Set up Docker Environment
-        - uses: actions/checkout@v2
-        - uses: actions/cache@v2
-          with:
-            path: |
-              /tmp/.buildx-cache
-            key:
-            {%- raw %}
-              buildx|${{ secrets.CACHE_DATE }}|${{ runner.os }}
-            {%- endraw %}
-        - name: Set up QEMU
-          uses: docker/setup-qemu-action@v1
-        - name: Set up Docker Buildx
-          id: buildx
-          uses: docker/setup-buildx-action@v1
-          with:
-            driver-opts: network=host
-            install: true
-        # Build and push
-        - name: Docker meta for local images
-          id: docker_meta_local
-          uses: crazy-max/ghaction-docker-meta@v1
-          with:
-            {%- raw %}
-            images: localhost:5000/${{ env.DOCKER_IMAGE_NAME }}
-            tag-edge: true
-            tag-semver: |
-              {{version}}
-              {{major}}
-              {{major}}.{{minor}}
-            {%- endraw %}
-        - name: Build and push to local (test) registry
-          uses: docker/build-push-action@v2
-          with:
-            context: .
-            file: ./Dockerfile
-            platforms: |
-            {%- for platform in image_platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
-              {{ platform }}
-            {%- endfor %}
-            load: false
-            push: true
-            cache-from: type=local,src=/tmp/.buildx-cache
-            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
-            {%- raw %}
-            labels: ${{ steps.docker_meta_local.outputs.labels }}
-            tags: ${{ steps.docker_meta_local.outputs.tags }}
-            {%- endraw %}
-        {% if dockerhub_image or push_to_ghcr -%}
-        # Next jobs only happen outside of pull requests and on main branches
-        {% if dockerhub_image -%}
-        - name: Login to DockerHub
-          if: {{ "${{ fromJSON(env.PUSH) }}" }}
-          uses: docker/login-action@v1
-          with:
-            username: {{ "${{ secrets.DOCKERHUB_LOGIN }}" }}
-            password: {{ "${{ secrets.DOCKERHUB_TOKEN }}" }}
-        {% endif -%}
-        {% if push_to_ghcr -%}
-        - name: Login to GitHub Container Registry
-          if: {{ "${{ fromJSON(env.PUSH) }}" }}
-          uses: docker/login-action@v1
-          with:
-            {%- raw %}
-            registry: ghcr.io
-            username: ${{ secrets.BOT_LOGIN }}
-            password: ${{ secrets.BOT_TOKEN }}
-            {%- endraw %}
-        {% endif -%}
-        - name: Docker meta for public images
-          if: {{ "${{ fromJSON(env.PUSH) }}" }}
-          id: docker_meta_public
-          uses: crazy-max/ghaction-docker-meta@v1
-          with:
-            images: |
-              {%- if push_to_ghcr %}
-              {{ "ghcr.io/${{ env.DOCKER_IMAGE_NAME }}" }}
-              {%- endif -%}
-              {%- if dockerhub_image %}
-              {{ "${{ env.DOCKERHUB_IMAGE_NAME }}" }}
-              {%- endif %}
-            {%- raw %}
-            tag-edge: true
-            tag-semver: |
-              {{version}}
-              {{major}}
-              {{major}}.{{minor}}
-            {%- endraw %}
-        - name: Build and push to public registry(s)
-          if: {{ "${{ fromJSON(env.PUSH) }}" }}
-          uses: docker/build-push-action@v2
-          with:
-            context: .
-            file: ./Dockerfile
-            platforms: |
-            {%- for platform in image_platforms or ['linux/386','linux/amd64','linux/arm/v6','linux/arm/v7','linux/arm/v8','linux/arm64','linux/ppc64le','linux/s390x'] %}
-              {{ platform }}
-            {%- endfor %}
-            load: false
-            push: true
-            cache-from: type=local,src=/tmp/.buildx-cache
-            cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
-            {%- raw %}
-            labels: ${{ steps.docker_meta_public.outputs.labels }}
-            tags: ${{ steps.docker_meta_public.outputs.tags }}
-            {%- endraw %}
-        {% endif %}
+        {%- if "dockerhub" in target_registries %}
+      - &dockerhub-login
+        name: Login to DockerHub
+        uses: docker/login-action@v4
+        with:
+          {%- raw %}
+          username: {{ "${{ secrets.DOCKERHUB_LOGIN }}" }}
+          password: {{ "${{ secrets.DOCKERHUB_TOKEN }}" }}
+          {%- endraw %}
+        {%- endif %}
+        {%- if "ghcr.io" in target_registries %}
+      - &ghcr-login
+        name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          {%- raw %}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          {%- endraw %}
+        {%- endif %}
+        {%- if target_registries %}
+      - &docker-meta
+        name: Docker meta
+        id: docker_meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: |
+            {%- if "ghcr.io" in target_registries %}
+            {% raw -%}ghcr.io/${{ env.IMAGE_NAME }}{%- endraw %}
+            {%- endif %}
+            {%- if "dockerhub" in target_registries %}
+            {% raw -%}docker.io/${{ env.IMAGE_NAME }}{%- endraw %}
+            {%- endif %}
+        {%- raw %}
+          tags: |
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+      # Push the images untagged, they are tagged later to make the multiarch manifest.
+      - name: Build and push arch-specific image
+        id: build-push
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/${{ matrix.platform }}
+          cache-from: type=gha,scope=build-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
+          outputs:
+            type=image,name=ghcr.io/${{ env.IMAGE_NAME
+            }},push-by-digest=true,name-canonical=true
+      # Stash the digest so the merge job can find it
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build-push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-manifest:
+    runs-on: ubuntu-24.04
+    needs: build-test-push
+    if: >
+      github.ref == github.event.repository.default_branch || (github.event_name ==
+      'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download all digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+      - *image-name
+      - *setup-buildx
+      - *ghcr-login
+      - *docker-meta
+      - name: Create and push multi-arch manifest
+        working-directory: /tmp/digests
+        run: |
+          {%- endraw %}
+          {%- if "ghcr.io" in target_registries %}
+          {%- raw %}
+          DIGESTS=$(printf 'ghcr.io/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          docker buildx imagetools create --tag ${{ steps.docker_meta.outputs.tags }} $DIGESTS
+          {%- endraw %}
+          {%- endif %}
+          {%- if "dockerhub" in target_registries %}
+          {%- raw %}
+          DIGESTS=$(printf 'docker.io/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          docker buildx imagetools create --tag ${{ steps.docker_meta.outputs.tags }} $DIGESTS
+          {%- endraw %}
+          {%- endif %}
+        {%- endif %}

@@ -1,23 +1,34 @@
-[tool.poetry]
+[project]
 name = "image-template"
-version = "0.1.0"
+version = "0.2.0"
 description = "Copier template to easily set up docker projects on Github"
-authors = ["Tecnativa"]
+authors = [{ name = "Tecnativa" }]
+requires-python = ">=3.9,<4"
+dependencies = [
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
+[dependency-groups]
+dev = [
+    "copier>=9.10.3",
+    "jsonschema>=4.25.1",
+    "pre-commit-uv>=4.1.5",
+    "pre-commit>=4.3.0",
+    "pytest-xdist>=3.8.0",
+    "pytest>=8.4.2",
+    "python-on-whales>=0.81.0",
+]
 
-[tool.poetry.dev-dependencies]
-pytest = "^6.2.1"
-pytest-xdist = "^2.2.0"
-PyYAML = "^5.4.1"
-plumbum = "^1.6.9"
-copier = "^5.1.0"
-jsonschema = "^3.2.0"
-ptpython = "^3.0.11"
-requests = "^2.25.1"
-pyaml = "^20.4.0"
+[tool.uv]
+package = false
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "B",   # flake8-bugbear
+    "I",   # isort
+    "UP",  # pyupgrade
+]
+
+[tool.pytest.ini_options]
+addopts = "-n auto -ra"

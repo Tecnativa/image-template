@@ -1,4 +1,4 @@
-name: test
+name: Test
 
 on:
   pull_request:
@@ -16,46 +16,22 @@ on:
 env:
   LANG: "en_US.utf-8"
   LC_ALL: "en_US.utf-8"
-  PIP_CACHE_DIR: ${{ github.workspace }}/.cache.~/pip
-  PIPX_HOME: ${{ github.workspace }}/.cache.~/pipx
-  POETRY_CACHE_DIR: ${{ github.workspace }}/.cache.~/pypoetry
-  POETRY_VIRTUALENVS_IN_PROJECT: "true"
   PYTEST_ADDOPTS: ${{ github.event.inputs.pytest_addopts }}
   PYTHONIOENCODING: "UTF-8"
+  UV_CACHE_DIR: /tmp/.uv-cache
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        python:
-          - "3.9"
+    runs-on: ubuntu-24.04
     steps:
-      # Prepare environment
-      - uses: actions/checkout@v2
-      # Set up and run tests
-      - name: Install python
-        uses: actions/setup-python@v1
+      - uses: actions/checkout@v6
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
-          python-version: "${{ matrix.python }}"
-      - name: Generate cache key CACHE
-        run:
-          echo "CACHE=${{ secrets.CACHE_DATE }} ${{ runner.os }} $(python -VV |
-          sha256sum | cut -d' ' -f1) ${{ hashFiles('pyproject.toml') }} ${{
-          hashFiles('poetry.lock') }}" >> $GITHUB_ENV
-      - uses: actions/cache@v2
-        with:
-          path: |
-            .cache.~
-            .venv
-            ~/.local/bin
-          key: venv {{ "${{ env.CACHE }}" }}
-      - run: pip install poetry
-      - name: Patch $PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - run: poetry install
-      # Let tests issue git commits
+          enable-cache: true
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
       - run: git config --global user.name CI
       - run: git config --global user.email CI@GITHUB
-      # Run tests
-      - run: poetry run pytest
+      - name: Run tests
+        run: uv run pytest
