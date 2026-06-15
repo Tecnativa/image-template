@@ -50,8 +50,8 @@ target_registries:
   multiselect: true
   default: []
   choices:
-    "ghcr.io": "ghcr.io"
-    "DockerHub": dockerhub
+    "Github container registry": "ghcr.io"
+    "DockerHub": "docker.io"
   help: |
     Registries to push the image to.
 
