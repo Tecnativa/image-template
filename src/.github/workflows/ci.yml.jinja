@@ -32,10 +32,10 @@ env:
   {%- endraw %}
   {%- endif %}
 
+# We test always, and only push when its the main branch or the PR comes from the owner
+# ORG of the repository
 jobs:
-  # We run separate jobs amd64 and arm64, each pushes its own image untagged, and then
-  # we create the proper tag in another job.
-  build-test-push:
+  build-test:
     strategy:
       matrix:
         platform:
@@ -44,13 +44,6 @@ jobs:
     {%- raw %}
     runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     {%- endraw %}
-    if: >
-      github.ref == github.event.repository.default_branch || (github.event_name ==
-      'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
-    permissions:
-      contents: read
-      packages: write
     steps:
       - &image-name
         # This needs to be done here as there is no other way as of June 2026 to
@@ -85,14 +78,37 @@ jobs:
         if: github.ref == github.event.repository.default_branch
         run: uv run pytest --image {{ project_name }}:testing
         {%- endif %}
-        {%- if "dockerhub" in target_registries %}
+  {%- if target_registries %}
+  # We run separate jobs amd64 and arm64, each pushes its own image untagged, and then
+  # we create the proper tag in another job.
+  build-push:
+    needs: build-test
+    strategy:
+      matrix:
+        platform:
+          - amd64
+          - arm64
+    {%- raw %}
+    if: >
+      github.ref_name == github.event.repository.default_branch || (github.event_name ==
+      'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    {%- endraw %}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - *image-name
+      - *setup-buildx
+        {%- if "docker.io" in target_registries %}
       - &dockerhub-login
         name: Login to DockerHub
         uses: docker/login-action@v4
         with:
           {%- raw %}
-          username: {{ "${{ secrets.DOCKERHUB_LOGIN }}" }}
-          password: {{ "${{ secrets.DOCKERHUB_TOKEN }}" }}
+          username: "${{ secrets.DOCKERHUB_LOGIN }}"
+          password: "${{ secrets.DOCKERHUB_TOKEN }}"
           {%- endraw %}
         {%- endif %}
         {%- if "ghcr.io" in target_registries %}
@@ -113,12 +129,9 @@ jobs:
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
           images: |
-            {%- if "ghcr.io" in target_registries %}
-            {% raw -%}ghcr.io/${{ env.IMAGE_NAME }}{%- endraw %}
-            {%- endif %}
-            {%- if "dockerhub" in target_registries %}
-            {% raw -%}docker.io/${{ env.IMAGE_NAME }}{%- endraw %}
-            {%- endif %}
+            {%- for registry in target_registries %}
+            {{ registry }}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %}
+            {%- endfor %}
         {%- raw %}
           tags: |
             type=ref,event=pr
@@ -135,9 +148,12 @@ jobs:
           platforms: linux/${{ matrix.platform }}
           cache-from: type=gha,scope=build-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
-          outputs:
-            type=image,name=ghcr.io/${{ env.IMAGE_NAME
-            }},push-by-digest=true,name-canonical=true
+          {%- endraw %}
+          outputs: |
+            {%- for registry in target_registries %}
+            type=image,name={{ registry }}/{% raw %}${{ env.IMAGE_NAME }}{% endraw %},push-by-digest=true,name-canonical=true
+            {%- endfor %}
+        {%- raw %}
       # Stash the digest so the merge job can find it
       - name: Export digest
         run: |
@@ -145,7 +161,7 @@ jobs:
           digest="${{ steps.build-push.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
       - name: Upload digest artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: digest-${{ matrix.platform }}
           path: /tmp/digests/*
@@ -154,7 +170,7 @@ jobs:
 
   merge-manifest:
     runs-on: ubuntu-24.04
-    needs: build-test-push
+    needs: build-push
     if: >
       github.ref == github.event.repository.default_branch || (github.event_name ==
       'pull_request' &&
@@ -164,7 +180,7 @@ jobs:
       packages: write
     steps:
       - name: Download all digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/digests
           pattern: digest-*
@@ -177,16 +193,11 @@ jobs:
         working-directory: /tmp/digests
         run: |
           {%- endraw %}
-          {%- if "ghcr.io" in target_registries %}
-          {%- raw %}
-          DIGESTS=$(printf 'ghcr.io/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+          {%- for registry in target_registries %}
+
+          DIGESTS=$(printf '{{registry}}/{% raw %}${{ env.IMAGE_NAME }}@sha256:%s ' *)
           docker buildx imagetools create --tag ${{ steps.docker_meta.outputs.tags }} $DIGESTS
           {%- endraw %}
-          {%- endif %}
-          {%- if "dockerhub" in target_registries %}
-          {%- raw %}
-          DIGESTS=$(printf 'docker.io/${{ env.IMAGE_NAME }}@sha256:%s ' *)
-          docker buildx imagetools create --tag ${{ steps.docker_meta.outputs.tags }} $DIGESTS
-          {%- endraw %}
-          {%- endif %}
+          {%- endfor %}
         {%- endif %}
+  {%- endif %}

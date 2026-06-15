@@ -89,3 +89,33 @@ def test_no_pytest_settings(tmp_path: Path, cloned_template: Path):
             yaml_data = yaml.safe_load(content)
             # Validate according to Github Actions expected syntax
             validate_schema(yaml_data, cloned_template)
+
+
+def test_registries(tmp_path: Path, cloned_template: Path):
+    """Test that a template can be rendered from zero."""
+    with local.cwd(cloned_template):
+        run_copy(
+            ".",
+            str(tmp_path),
+            vcs_ref="test",
+            defaults=True,
+            data={
+                "project_name": "docker-test",
+                "project_owner": "Test",
+                "image_name": "test/test",
+                "target_registries": ["ghcr.io", "docker.io"],
+            },
+        )
+    with local.cwd(tmp_path):
+        # Check that files exist
+        assert Path(".github", "workflows", "ci.yml").exists()
+        assert Path(".copier-answers.image-template.yml").exists()
+        # Tests are included by default
+        assert Path("pyproject.toml").exists()
+        assert Path("tests/conftest.py").exists()
+        # Validate CI config
+        with Path(".github", "workflows", "ci.yml").open("r") as f:
+            content = f.read()
+            yaml_data = yaml.safe_load(content)
+            # Validate according to Github Actions expected syntax
+            validate_schema(yaml_data, cloned_template)
